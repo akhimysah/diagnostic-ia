@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Diagnostic IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Krona+One&family=Kumbh+Sans:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout : une copie d'examen — en-tête collant avec chrono, onglets de parties, une partie à la fois, puis un bulletin de résultats */
+:root{
+  --bg:#FFF9F6; --paper:#FFFFFF; --ink:#16100D; --muted:#6B615C; --line:#E3D9D2;
+  --accent:#C51919; --accent-soft:#FBE6E2; --on-accent:#FFFFFF; --good:#1B7F3B; --good-soft:#E4F3E8; --bad:#8A0202; --bad-soft:#F6E0DD; --warn:#9A5B00; --warn-soft:#FAEEDB;
+  --f-display:"Krona One","Kumbh Sans",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Kumbh Sans",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#16100D; --paper:#211915; --ink:#F7F0EB; --muted:#A99F99; --line:#3A2E28;
+  --accent:#FF7A6B; --accent-soft:#3A1C18; --on-accent:#16100D; --good:#6CCB8C; --good-soft:#15291C; --bad:#E8A0A0; --bad-soft:#3A1E1C; --warn:#E3A94A; --warn-soft:#33270F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#16100D; --paper:#211915; --ink:#F7F0EB; --muted:#A99F99; --line:#3A2E28;
+  --accent:#FF7A6B; --accent-soft:#3A1C18; --on-accent:#16100D; --good:#6CCB8C; --good-soft:#15291C; --bad:#E8A0A0; --bad-soft:#3A1E1C; --warn:#E3A94A; --warn-soft:#33270F; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:17px/1.55 var(--f-body)}
+.wrap{max-width:860px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(22px,4.2vw,32px);font-weight:400;line-height:1.25}
+h2{font-size:21px;font-weight:400}
+h3{font-family:var(--f-body);font-size:18px;font-weight:700}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.label{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+p{margin:0}
+.muted{color:var(--muted)}
+
+header.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.bar .wrap{display:flex;align-items:center;gap:12px;padding-block:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto;min-width:0}
+.brand img{height:30px;width:auto;max-width:140px;object-fit:contain}
+.brand .mark{width:30px;height:30px;border-radius:7px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:700 13px var(--f-mono)}
+.brand .name{font-family:var(--f-display);font-weight:400;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand .sub{font-size:13px;color:var(--muted);display:block;line-height:1.1}
+.timer{font-family:var(--f-mono);font-size:18px;padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+.timer.low{color:var(--warn);border-color:var(--warn)}
+.timer.over{color:var(--bad);border-color:var(--bad)}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;scrollbar-width:thin}
+.tab{flex:0 0 auto;font:600 14px var(--f-body);color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;display:flex;gap:6px;align-items:center}
+.tab .n{font-family:var(--f-mono);font-size:11px}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.tab.done:not([aria-selected="true"]){color:var(--good);border-color:var(--good)}
+
+.intro{padding-block:36px 8px;display:grid;gap:16px}
+.intro .lead{font-size:19px;max-width:62ch}
+.plan{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:6px}
+.plan div{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:grid;gap:2px;align-content:start}
+.plan b{font-weight:700}
+.ident{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:560px){.ident{grid-template-columns:1fr}}
+
+section.part{display:grid;gap:18px;padding-top:28px}
+.part-head{display:grid;gap:6px}
+.q{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:12px;min-width:0}
+.q legend,.q .qt{font-weight:600;font-size:17px;padding:0;display:flex;gap:10px}
+.q .num{font-family:var(--f-mono);font-size:13px;color:var(--accent);padding-top:3px;flex:0 0 auto}
+.q .kind{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--warn)}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+.opts{display:grid;gap:8px}
+.opt{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.opt:hover{border-color:var(--accent)}
+.opt input{margin-top:5px;accent-color:var(--accent)}
+.opt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.opt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.opt.idk{border-style:dashed;color:var(--muted)}
+.opt.idk:has(input:checked){border-color:var(--warn);background:var(--warn-soft);color:var(--ink)}
+.scene{background:var(--bg);border-left:3px solid var(--warn);border-radius:0 8px 8px 0;padding:10px 14px;font-size:16px}
+.ctx{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:16px;display:grid;gap:6px}
+.ctx .label{margin-bottom:2px}
+input[type=text],textarea,select{width:100%;font:16px/1.5 var(--f-body);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+textarea{min-height:120px;resize:vertical}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.field{display:grid;gap:6px}
+.field label{font-weight:600}
+.hint{font-size:14px;color:var(--muted)}
+.scale{display:flex;gap:6px;flex-wrap:wrap}
+.scale .opt{flex:1 1 0;justify-content:center;min-width:52px}
+
+/* Exercices en grille : une ligne = un élément à classer */
+.grid{display:grid;gap:10px}
+.grow{display:grid;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
+.grow:first-child{border-top:0;padding-top:0}
+.grow .rt{font-weight:600;display:flex;gap:8px}
+.grow .rt .mono{font-size:12px;color:var(--muted);padding-top:3px}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;font-size:15px;cursor:pointer}
+.pill input{accent-color:var(--accent);margin:0}
+.pill:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.pill:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.pill.idk{border-style:dashed;color:var(--muted)}
+.pill.idk:has(input:checked){border-color:var(--warn);background:var(--warn-soft);color:var(--ink)}
+
+.nav{display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;padding-top:8px}
+.btn{font:600 16px var(--f-body);border-radius:8px;padding:10px 18px;cursor:pointer;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.confirm{background:var(--paper);border:1px solid var(--warn);border-radius:10px;padding:16px;display:grid;gap:12px}
+
+/* Résultats */
+.report{display:grid;gap:22px;padding-top:28px}
+.verdict{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:22px;display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center}
+@media (max-width:560px){.verdict{grid-template-columns:1fr}}
+.score{font-family:var(--f-display);font-size:52px;font-weight:400;line-height:1}
+.score small{font-size:22px;color:var(--muted);font-weight:500}
+.level{display:inline-block;font-family:var(--f-mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.ladder{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:10px}
+.ladder span{font-size:12px;font-family:var(--f-mono);text-align:center;padding:6px 2px;border-radius:4px;background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.ladder span.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.bars{display:grid;gap:12px}
+.barrow{display:grid;grid-template-columns:170px 1fr 92px 52px;gap:12px;align-items:center}
+.barrow .tag{font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:3px 8px;border-radius:999px;text-align:center}
+.tag.fort{background:var(--good-soft);color:var(--good)}
+.tag.moyen{background:var(--warn-soft);color:var(--warn)}
+.tag.faible{background:var(--bad-soft);color:var(--bad)}
+@media (max-width:560px){.barrow{grid-template-columns:1fr auto 52px}.barrow .track{grid-column:1/-1;grid-row:2}}
+.track{height:10px;background:var(--bg);border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.fill{height:100%;background:var(--accent)}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:10px}
+.card ul{margin:0;padding-left:20px;display:grid;gap:6px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:560px){.two{grid-template-columns:1fr}}
+.stat{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.stat b{font-family:var(--f-mono);font-size:22px;display:block}
+.corr{display:grid;gap:8px}
+.corr details{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.corr summary{cursor:pointer;font-weight:600}
+.ci{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:15px}
+.ci:first-of-type{border-top:0}
+.ci .mark{font-family:var(--f-mono);font-weight:500}
+.ok{color:var(--good)} .ko{color:var(--bad)} .idkc{color:var(--warn)}
+.locked{border:1px dashed var(--line);border-radius:10px;padding:16px;color:var(--muted)}
+.consult{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:3px 10px}
+.out{font-family:var(--f-mono);font-size:13px;white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;max-height:260px;overflow:auto}
+@media (prefers-reduced-motion:no-preference){.fill{transition:width .6s ease}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <div class="brand" id="brand"></div>
+    <span class="label" id="progress">0 / 0 réponses</span>
+    <span class="timer" id="timer" title="Temps restant">60:00</span>
+  </div>
+  <div class="wrap"><nav class="tabs" id="tabs" role="tablist" aria-label="Parties de l'examen"></nav></div>
+</header>
+
+<main class="wrap" id="main"></main>
+
+<script>
+/* ===== Personnalisation : votre nom, votre logo, votre couleur =====
+   name   : nom du cabinet ou du consultant affiché en haut de page
+   tagline: sous-titre court (facultatif)
+   logo   : image en data URI (data:image/png;base64,…) — laisser vide pour afficher les initiales
+   accent : couleur principale (ex. "#1F5FBF") — laisser vide pour garder la couleur par défaut
+   contact: e-mail ou téléphone où le client envoie son bilan (facultatif)          */
+const BRAND = { name:"Samy Ait Ouaret", tagline:"Oriion Studio · Diagnostic IA", logo:"", accent:"", contact:"Samy Ait Ouaret" };
+
+const IDK = "Je ne sais pas";
+
+const PARTS = [
+ {id:"profil", title:"Votre profil", min:4, scored:false,
+  intro:"Pas de bonne ou de mauvaise réponse ici. Ces questions servent à comparer votre ressenti à votre niveau mesuré.",
+  items:[
+   {t:"single", k:"freq", q:"À quelle fréquence utilisez-vous un outil d'IA (ChatGPT, Claude, Gemini, Copilot…) ?",
+    o:["Jamais","Quelques fois au total","Chaque semaine","Tous les jours"]},
+   {t:"multi", k:"outils", q:"Quels outils avez-vous déjà utilisés ? (plusieurs choix)",
+    o:["ChatGPT","Claude","Gemini","Microsoft Copilot","Mistral / Le Chat","Perplexity","Midjourney / DALL·E / générateur d'images","Zapier, Make ou n8n avec de l'IA","Aucun"]},
+   {t:"single", k:"payant", q:"Payez-vous un abonnement IA (perso ou entreprise) ?", o:["Non","Oui, à titre personnel","Oui, via mon entreprise"]},
+   {t:"scale", k:"confiance", q:"Sur une échelle de 1 à 5, comment évaluez-vous votre niveau en IA ?", o:["1","2","3","4","5"], hint:"1 = je découvre, 5 = je l'utilise de façon avancée au quotidien"},
+   {t:"multi", k:"usages", q:"Pour quoi l'utilisez-vous aujourd'hui ?",
+    o:["Rédiger ou reformuler des textes","Faire des recherches","Résumer des documents","Analyser des chiffres / Excel","Créer des visuels","Préparer des présentations","Coder ou automatiser","Je ne l'utilise pas encore"]},
+   {t:"text", k:"metier", q:"Votre métier et votre secteur en une phrase", ph:"Ex. : gérante d'une agence immobilière de 6 personnes"},
+   {t:"long", k:"attentes", q:"Qu'attendez-vous de l'IA dans votre activité ?", ph:"Gagner du temps sur…, mieux…, arrêter de…"}
+  ]},
+
+ {id:"fond", title:"Les fondamentaux", short:"Fondamentaux", min:7, scored:true,
+  intro:"Comprendre comment fonctionne l'IA générative, sans jargon inutile.",
+  weak:"Atelier « comprendre l'IA » : fonctionnement, vocabulaire de base, ce qu'elle sait faire et ne sait pas faire.",
+  items:[
+   {q:"Qu'est-ce qu'un grand modèle de langage (LLM), comme celui derrière ChatGPT ou Claude ?",
+    o:["Une immense base de données de réponses toutes prêtes","Un modèle entraîné sur beaucoup de textes pour prédire la suite la plus probable d'un texte","Un moteur de recherche qui lit Internet en direct","Un programme dont toutes les règles ont été écrites à la main"], c:1,
+    e:"Un LLM génère le texte mot après mot en prédisant la suite la plus probable. Il ne « cherche » pas une réponse stockée."},
+   {q:"Que désigne le terme « hallucination » en IA ?",
+    o:["Une image générée par l'IA","Une réponse fausse ou inventée, présentée avec assurance","Un bug qui fait planter l'outil","Une réponse trop créative demandée par l'utilisateur"], c:1,
+    e:"Le modèle peut inventer des faits, des chiffres ou des sources de façon très convaincante. D'où l'importance de vérifier."},
+   {q:"Comment s'articulent IA, machine learning et deep learning ?",
+    o:["Ce sont trois synonymes","Le deep learning englobe l'IA et le machine learning","Le machine learning est une branche de l'IA, et le deep learning une branche du machine learning","Ce sont trois technologies concurrentes sans lien"], c:2,
+    e:"Ce sont des cercles emboîtés : IA ⊃ machine learning ⊃ deep learning. Les LLM relèvent du deep learning."},
+   {q:"Qu'est-ce qu'un « token » ?",
+    o:["Un mot de passe pour accéder à l'IA","Un morceau de texte (souvent une partie de mot) que le modèle lit et produit","Une cryptomonnaie liée à l'IA","Une question posée au modèle"], c:1,
+    e:"Les modèles découpent le texte en tokens. Les limites de longueur et les tarifs des API se comptent en tokens."},
+   {q:"La « fenêtre de contexte » d'un modèle correspond à…",
+    o:["La taille de l'écran de l'application","La quantité de texte que le modèle peut prendre en compte en une seule fois","Le nombre d'utilisateurs simultanés","La période couverte par ses données d'entraînement"], c:1,
+    e:"Tout ce qui est dans la conversation (vos messages, documents, réponses) doit tenir dans cette fenêtre."},
+   {q:"Vous posez deux fois exactement la même question et obtenez deux réponses différentes. Pourquoi ?",
+    o:["L'outil est en panne","Le modèle a appris de votre première question entre-temps","La génération comporte une part d'aléatoire : plusieurs suites sont possibles","Quelqu'un a modifié le modèle"], c:2,
+    e:"La génération est probabiliste. C'est normal et utile pour obtenir des variantes."},
+   {q:"Un modèle ne connaît pas un événement de la semaine dernière. L'explication la plus probable ?",
+    o:["Ses données d'entraînement s'arrêtent à une date donnée, et il n'a pas accès à une recherche web","Il cache volontairement l'information","L'événement est classé confidentiel","Il faut redémarrer l'application"], c:0,
+    e:"Chaque modèle a une date limite de connaissances. Pour l'actualité, il faut un outil connecté au web, ou lui fournir l'information."},
+   {q:"Quelle est la différence entre IA générative et IA prédictive « classique » ?",
+    o:["Aucune","La générative crée du contenu nouveau (texte, image, son) ; la prédictive classe ou prévoit (score, risque, prévision de ventes)","La prédictive est plus récente","La générative ne fonctionne qu'avec des images"], c:1,
+    e:"Les deux coexistent en entreprise : la prédictive existe depuis longtemps (scoring, détection de fraude), la générative s'est démocratisée depuis 2022."},
+   {q:"Qu'est-ce qu'un « agent IA » ?",
+    o:["Un commercial qui vend des solutions IA","Un chatbot qui répond seulement à des questions","Un système IA qui enchaîne lui-même plusieurs actions avec des outils (navigation, fichiers, logiciels) pour atteindre un objectif","Un antivirus basé sur l'IA"], c:2,
+    e:"L'agent ne se contente pas de répondre : il planifie et agit (chercher, remplir, envoyer, coder), souvent sous supervision humaine."},
+   {q:"Que signifie concrètement le RAG (Retrieval-Augmented Generation) ?",
+    o:["Réentraîner entièrement le modèle sur ses données","Retrouver des documents pertinents (ex. : vos PDF internes) et les fournir au modèle au moment de la question","Une méthode pour générer des images","Un label de conformité européen"], c:1,
+    e:"C'est la technique derrière la plupart des « chatbots sur vos documents » : on va chercher les bons passages, puis le modèle répond à partir d'eux."},
+   {q:"Un modèle « multimodal » est un modèle qui…",
+    o:["Fonctionne sur plusieurs appareils","Parle plusieurs langues","Peut comprendre ou produire plusieurs types de contenus : texte, image, audio, vidéo","Utilise plusieurs abonnements"], c:2,
+    e:"Exemple : envoyer une photo d'une facture et lui demander d'en extraire les montants."},
+   {q:"Le « fine-tuning » consiste à…",
+    o:["Régler la luminosité des images générées","Poursuivre l'entraînement d'un modèle existant sur des données spécifiques pour l'adapter à un usage","Corriger les fautes d'orthographe d'une réponse","Choisir le modèle le moins cher"], c:1,
+    e:"Utile dans certains cas précis, mais souvent un bon prompt, des exemples ou du RAG suffisent et coûtent bien moins cher."}
+  ]},
+
+ {id:"outils", title:"Outils et usages", short:"Outils", min:7, scored:true,
+  intro:"Savoir quel outil utiliser, pour quoi, et où sont les limites.",
+  weak:"Panorama des outils IA utiles à votre métier, avec démonstration et choix d'un outil par besoin.",
+  items:[
+   {q:"Lequel de ces outils n'est PAS un assistant IA conversationnel ?",
+    o:["Claude","Gemini","Trello","Le Chat (Mistral)"], c:2,
+    e:"Trello est un outil de gestion de tâches. Les trois autres sont des assistants IA."},
+   {q:"Pour quelle tâche l'IA générative est-elle aujourd'hui la plus fiable sans effort particulier ?",
+    o:["Rédiger le premier jet d'un e-mail ou d'un compte rendu","Garantir l'exactitude juridique d'un contrat sans relecture","Donner le cours exact d'une action en ce moment, sans accès web","Prendre seule une décision de recrutement"], c:0,
+    e:"Rédaction, reformulation, synthèse : c'est le terrain le plus solide. Les sujets à fort enjeu exigent toujours une validation humaine."},
+   {q:"Vous voulez que chaque nouveau formulaire de contact déclenche un résumé IA envoyé sur votre messagerie. Quel type d'outil ?",
+    o:["Un générateur d'images","Un outil d'automatisation comme Zapier, Make ou n8n","Un traitement de texte","Un antivirus"], c:1,
+    e:"Ces outils relient vos applications entre elles et peuvent appeler une IA à chaque étape, sans coder."},
+   {q:"Vous devez additionner 4 000 lignes de ventes. Quelle est la meilleure approche ?",
+    o:["Coller les chiffres dans le chat et demander le total de tête","Utiliser un tableur, ou un assistant capable d'exécuter du code sur le fichier","Demander une estimation à l'IA","Faire le calcul à la main"], c:1,
+    e:"Les modèles de langage peuvent se tromper en calcul mental sur de gros volumes. Quand ils exécutent du code ou passent par un tableur, le résultat est exact."},
+   {q:"À quoi servent les « Projets » (Claude) ou les « GPTs » (ChatGPT) ?",
+    o:["À partager son écran","À garder des instructions et des documents de référence réutilisables pour un même type de tâche","À payer moins cher","À traduire l'interface"], c:1,
+    e:"On y range son contexte une fois (ton de la marque, offres, process) pour ne pas tout réexpliquer à chaque conversation."},
+   {q:"Vous faites une recherche avec une IA qui affiche des sources. Bonne pratique ?",
+    o:["Faire confiance : il y a des liens","Ouvrir les sources clés et vérifier qu'elles disent bien ce que l'IA affirme","Ignorer les sources","Demander à l'IA si elle est sûre"], c:1,
+    e:"Une source citée peut être mal résumée, ou ne pas contenir l'information. On vérifie les points importants."},
+   {q:"Microsoft 365 Copilot, c'est…",
+    o:["Un pilote automatique pour voiture","Une IA intégrée dans Word, Excel, Outlook et Teams, qui travaille sur vos fichiers et e-mails","Un antivirus Microsoft","Une version gratuite d'Office"], c:1,
+    e:"L'intérêt : l'IA accède au contexte de l'entreprise (mails, réunions, documents) selon vos droits d'accès."},
+   {q:"Comment savoir si l'IA fait réellement gagner du temps dans votre entreprise ?",
+    o:["Demander à l'IA","Mesurer une tâche précise avant/après : temps passé, qualité, nombre d'allers-retours","Compter le nombre d'abonnements","Regarder ce que font les concurrents"], c:1,
+    e:"On choisit 2 ou 3 tâches cibles et on mesure. Sans mesure, impossible de prioriser ni de justifier l'investissement."},
+   {q:"Vous voulez transcrire et résumer automatiquement vos réunions visio. Quelle option convient ?",
+    o:["Un outil de prise de notes IA (intégré à Teams/Meet/Zoom ou dédié)","Un générateur d'images","Un tableur","Un correcteur orthographique"], c:0,
+    e:"Ces outils produisent transcription, résumé et liste d'actions. Prévenez les participants qu'ils sont enregistrés."},
+   {q:"Quel est l'intérêt principal d'un abonnement payant à un assistant IA par rapport à la version gratuite ?",
+    o:["Aucun","Des modèles plus performants, des limites d'usage plus hautes, plus de fonctions (fichiers, projets) et souvent de meilleures garanties sur les données en offre entreprise","L'IA devient infaillible","Les réponses sont validées par un humain"], c:1,
+    e:"Les offres « équipe/entreprise » s'engagent en général à ne pas utiliser vos données pour l'entraînement. À vérifier dans les conditions."},
+   {q:"Un assistant IA « connecté » à votre messagerie ou à votre Google Drive permet surtout de…",
+    o:["Supprimer automatiquement vos anciens fichiers","Retrouver et utiliser vos propres e-mails et documents dans ses réponses, dans la limite de vos droits d'accès","Envoyer vos fichiers à tous vos contacts","Rendre vos documents publics"], c:1,
+    e:"Exemple : « retrouve le dernier devis envoyé à Dupont et résume les conditions ». Les connecteurs donnent du contexte réel à l'IA."},
+   {q:"Vous voulez des réponses à jour avec des sources citées, par exemple sur une réglementation récente. Quelle option est la plus adaptée ?",
+    o:["Un assistant sans accès web","Un outil de recherche IA (Perplexity, ou le mode recherche web d'un assistant)","Un générateur d'images","Un modèle plus ancien"], c:1,
+    e:"Le mode recherche consulte le web au moment de la question et affiche ses sources. On vérifie quand même les sources officielles."}
+  ]},
+
+ {id:"prompt", title:"L'art du prompt", short:"Prompting", min:8, scored:true,
+  intro:"Bien formuler sa demande change radicalement la qualité des réponses.",
+  weak:"Atelier prompting sur vos propres tâches : structure d'un bon prompt, exemples, itérations.",
+  items:[
+   {q:"Lequel de ces prompts donnera le meilleur résultat ?",
+    o:["« Fais-moi un post LinkedIn. »","« Post LinkedIn sur l'IA, stp. »","« Tu es responsable marketing d'un cabinet comptable. Rédige un post LinkedIn de 150 mots pour des dirigeants de PME, annonçant notre webinaire du 12 novembre sur la facture électronique. Ton expert mais accessible, une question en accroche, un appel à s'inscrire à la fin. »","« Écris le meilleur post LinkedIn possible. »"], c:2,
+    e:"Contexte, objectif, public, format, ton, contraintes : plus la demande est précise, plus la réponse est utilisable."},
+   {q:"Pourquoi donner un rôle à l'IA (« Tu es un juriste spécialisé en droit du travail… ») ?",
+    o:["C'est obligatoire","Pour cadrer le niveau d'expertise, le vocabulaire et l'angle de réponse","Pour que l'IA devienne réellement juriste","Ça n'a aucun effet"], c:1,
+    e:"Le rôle oriente la réponse. Il ne remplace pas pour autant un vrai professionnel."},
+   {q:"Vous voulez que l'IA rédige des fiches produits dans le même style que les vôtres. Le plus efficace ?",
+    o:["Lui dire « fais comme d'habitude »","Lui donner 2 ou 3 fiches existantes en exemple","Lui demander d'être créative","Écrire en majuscules"], c:1,
+    e:"Montrer des exemples (« few-shot ») est souvent plus efficace que de longues explications."},
+   {q:"La réponse est trop générique. Quelle est la meilleure réaction ?",
+    o:["Abandonner l'outil","Reposer la même question","Ajouter du contexte : votre situation, vos contraintes, ce qui ne va pas dans la réponse","Changer de navigateur"], c:2,
+    e:"Une réponse générique vient presque toujours d'une demande générique. On précise et on itère."},
+   {q:"Vous donnez un contrat de 40 pages à l'IA. Comment limiter le risque d'erreur dans sa synthèse ?",
+    o:["Lui demander de citer les passages exacts et les numéros d'articles qui justifient chaque point","Lui demander d'aller plus vite","Ne pas relire","Lui demander un résumé en une phrase"], c:0,
+    e:"Demander les citations rend la réponse vérifiable et réduit les inventions."},
+   {q:"Votre demande est encore floue dans votre tête. Quelle technique aide ?",
+    o:["Envoyer quand même et espérer","Demander à l'IA de vous poser d'abord les questions nécessaires avant de répondre","Écrire le prompt en anglais","Faire un prompt très court"], c:1,
+    e:"« Avant de répondre, pose-moi les questions dont tu as besoin » : très efficace pour cadrer un sujet."},
+   {q:"Quel élément faut-il préciser pour obtenir directement un résultat exploitable ?",
+    o:["La couleur de votre logo","Le format de sortie attendu : tableau, liste, longueur, structure, langue","Votre date de naissance","Le nom du modèle"], c:1,
+    e:"« Réponds sous forme de tableau à 3 colonnes : tâche, responsable, échéance » évite une mise en forme à refaire."},
+   {q:"Vous avez une bonne conversation mais la réponse n'est pas encore parfaite. Que faire ?",
+    o:["Tout recommencer dans une nouvelle conversation","Donner un retour précis dans la même conversation (« plus court, enlève le jargon, ajoute un exemple chiffré »)","Accepter tel quel","Copier la réponse dans un autre outil"], c:1,
+    e:"L'IA garde le contexte de la conversation : des retours ciblés améliorent vite le résultat."},
+   {q:"Vous demandez un plan marketing complet pour l'année en un seul message, et le résultat est superficiel. Que faire ?",
+    o:["Ajouter « fais un effort » au prompt","Découper en étapes : d'abord l'analyse de la cible, puis les objectifs, puis les actions mois par mois, en validant chaque étape","Demander un texte plus long","Utiliser un autre outil"], c:1,
+    e:"Une tâche complexe se traite mieux en plusieurs étapes guidées qu'en une seule demande géante."},
+   {q:"Toute votre équipe utilise l'IA pour écrire aux clients, mais le ton change d'une personne à l'autre. La meilleure solution ?",
+    o:["Interdire l'IA pour les e-mails","Rédiger un guide de ton avec exemples et l'enregistrer comme instructions partagées (Projet, GPT, Copilot)","Demander à chacun de faire attention","Changer d'outil chaque mois"], c:1,
+    e:"Des consignes communes, écrites une fois et réutilisées par tous, donnent un ton cohérent."}
+  ]},
+
+ {id:"situ", title:"Mises en situation", short:"Mises en situation", min:10, scored:true,
+  intro:"Des cas concrets du quotidien d'une entreprise. Choisissez la réaction que vous auriez vraiment.",
+  weak:"Ateliers sur des cas réels de votre entreprise, pour transformer la théorie en bons réflexes.",
+  items:[
+   {s:"Une collaboratrice colle un contrat client confidentiel dans une IA gratuite pour le résumer plus vite.",
+    q:"En tant que responsable, que faites-vous ?",
+    o:["Rien, elle a gagné du temps","Vous interdisez toute IA dans l'entreprise","Vous lui rappelez la règle, vérifiez ce que l'outil fait des données, et proposez une solution encadrée (offre entreprise ou document anonymisé)","Vous supprimez la conversation et n'en parlez plus"], c:2,
+    e:"Ni laxisme, ni interdiction totale : on encadre. Une interdiction pousse souvent les équipes à utiliser l'IA en cachette."},
+   {s:"Pour un courrier à un client, l'IA vous cite une décision de justice avec un numéro d'arrêt précis.",
+    q:"Que faites-vous avant d'envoyer le courrier ?",
+    o:["Vous l'envoyez : le numéro prouve que c'est vrai","Vous vérifiez la décision sur une source officielle (Légifrance, base juridique) avant de la citer","Vous demandez à l'IA de confirmer","Vous retirez simplement le numéro"], c:1,
+    e:"Les références précises (arrêts, articles, études) sont typiquement ce que l'IA peut inventer. Des avocats ont déjà été sanctionnés pour ça."},
+   {s:"Votre commercial a rédigé 200 e-mails de prospection avec l'IA et veut les envoyer d'un coup.",
+    q:"Quelle est la meilleure approche ?",
+    o:["Envoyer tout de suite, c'est le but","Relire un échantillon, vérifier la personnalisation et les informations, respecter les règles de prospection (RGPD, désinscription), puis envoyer par vagues","Tout réécrire à la main","Demander à l'IA d'envoyer elle-même"], c:1,
+    e:"Un e-mail faux ou mal personnalisé envoyé 200 fois abîme la réputation. On contrôle avant d'industrialiser."},
+   {s:"Votre comptable reçoit un appel : c'est la voix du dirigeant, qui demande un virement urgent et confidentiel.",
+    q:"Quel est le bon réflexe ?",
+    o:["Faire le virement : c'est bien sa voix","Raccrocher et rappeler le dirigeant sur son numéro habituel, et appliquer la procédure de double validation","Demander le code de sécurité par message","Attendre le lendemain sans rien dire"], c:1,
+    e:"Le clonage de voix rend l'arnaque au faux dirigeant très crédible. Seule une vérification par un autre canal protège."},
+   {s:"Vous avez rendez-vous dans 15 minutes avec un prospect que vous ne connaissez pas.",
+    q:"Comment l'IA peut-elle vous aider le mieux ?",
+    o:["Elle ne peut rien faire en 15 minutes","Lui demander, avec la recherche web activée, une synthèse de l'entreprise, ses enjeux probables et 5 questions à poser, puis vérifier les points clés sur son site","Lui demander d'inventer un historique pour briller","Lui demander de participer au rendez-vous à votre place"], c:1,
+    e:"Préparer un rendez-vous est un excellent usage : rapide, utile, et facile à vérifier."},
+   {s:"Votre équipe vous dit : « L'IA ne sert à rien, ses réponses sont nulles. »",
+    q:"Que faites-vous ?",
+    o:["Vous abandonnez le projet","Vous regardez ensemble quelques-unes de leurs demandes, et organisez une courte formation sur un cas concret de leur métier","Vous changez d'outil sans en parler","Vous rendez l'IA obligatoire"], c:1,
+    e:"Le problème vient très souvent des prompts trop courts ou de cas d'usage mal choisis, pas de l'outil."},
+   {s:"Vous voulez un chatbot sur votre site qui réponde aux questions sur vos offres et vos tarifs.",
+    q:"Quelle est la bonne façon de le mettre en place ?",
+    o:["Brancher une IA généraliste sans rien lui donner","Le baser sur vos propres documents à jour, le tester sur des vraies questions, prévoir le passage à un humain, et indiquer clairement aux visiteurs qu'ils parlent à une IA","Le laisser promettre des remises pour vendre plus","Le cacher pour que les clients croient parler à un humain"], c:1,
+    e:"Un chatbot mal cadré peut inventer des prix ou des conditions, et l'entreprise en reste responsable."},
+   {s:"Vous demandez un logo à un générateur d'images. Le résultat ressemble beaucoup à celui d'une marque connue.",
+    q:"Que faites-vous ?",
+    o:["Vous l'utilisez, c'est l'IA qui l'a fait","Vous ne l'utilisez pas : risque de contrefaçon. Vous faites une autre proposition, idéalement retravaillée par un graphiste et vérifiée avant dépôt","Vous changez juste la couleur","Vous le déposez vite à l'INPI"], c:1,
+    e:"Ce n'est pas parce que l'IA l'a produit qu'il est libre de droits. Le risque juridique reste pour vous."},
+   {s:"Le compte rendu IA d'une réunion attribue à un collègue une décision qu'il n'a jamais prise.",
+    q:"Quelle règle en tirez-vous ?",
+    o:["Ne plus jamais utiliser de comptes rendus IA","Faire relire et valider le compte rendu par un participant avant de le diffuser","Diffuser quand même, personne ne lit","Demander à l'IA de s'excuser"], c:1,
+    e:"Les comptes rendus IA font gagner beaucoup de temps, mais doivent être relus avant diffusion."},
+   {s:"Vous hésitez à prendre un abonnement IA payant pour vos 8 salariés.",
+    q:"Comment décider intelligemment ?",
+    o:["Tout le monde tout de suite, c'est l'avenir","Jamais, c'est trop cher","Un test d'un mois avec 2 ou 3 personnes motivées, sur des tâches précises dont on mesure le temps gagné, puis décision","Choisir l'outil le moins cher sans test"], c:2,
+    e:"Un pilote court et mesuré évite de payer des licences inutilisées, et crée des ambassadeurs internes."}
+  ]},
+
+ {id:"risques", title:"Risques et cadre légal", short:"Risques et cadre légal", min:5, scored:true,
+  intro:"Utiliser l'IA de façon responsable, pour vous et vos clients.",
+  weak:"Session RGPD et AI Act appliquée à votre activité, et rédaction d'une charte d'usage simple.",
+  items:[
+   {q:"Pouvez-vous coller le fichier clients complet (noms, téléphones, achats) dans une IA gratuite grand public ?",
+    o:["Oui, sans problème","Non, pas sans avoir vérifié les conditions d'utilisation, l'usage fait des données et votre cadre RGPD ; mieux vaut anonymiser ou utiliser une offre entreprise","Oui, si on supprime la conversation ensuite","Oui, si c'est un petit fichier"], c:1,
+    e:"Les données personnelles de vos clients sont protégées par le RGPD. Anonymisez, ou passez par un outil dont le contrat encadre ces données."},
+   {q:"Le RGPD s'applique-t-il quand on utilise l'IA ?",
+    o:["Non, l'IA en est exemptée","Oui, dès qu'on traite des données personnelles","Seulement pour les grandes entreprises","Seulement hors d'Europe"], c:1,
+    e:"Le RGPD vaut quel que soit l'outil, IA comprise."},
+   {q:"Que fait le règlement européen sur l'IA (AI Act) ?",
+    o:["Il interdit l'IA en Europe","Il encadre les systèmes d'IA selon leur niveau de risque, avec des obligations plus fortes pour les usages à haut risque","Il ne concerne que les robots","Il impose un logiciel unique"], c:1,
+    e:"Certains usages sont interdits, d'autres (recrutement, crédit, santé…) très encadrés. Il prévoit aussi des obligations de transparence et de formation des personnes qui utilisent l'IA."},
+   {q:"Vous utilisez l'IA pour présélectionner des CV. Quel est le principal risque ?",
+    o:["Aucun","Le modèle peut reproduire des biais (âge, genre, origine) présents dans les données ; c'est en plus un usage classé à haut risque","Les CV seront trop longs","L'IA refusera de lire les PDF"], c:1,
+    e:"Le recrutement est un domaine sensible : transparence, supervision humaine et contrôle des biais sont indispensables."},
+   {q:"Une vidéo choquante d'un dirigeant circule et semble réelle. Le bon réflexe ?",
+    o:["La partager vite","Vérifier la source d'origine et les médias fiables : ce peut être un deepfake","La croire si elle a beaucoup de vues","Demander à un chatbot si elle est vraie"], c:1,
+    e:"Les deepfakes (vidéo, voix) sont de plus en plus crédibles."},
+   {q:"Qui est responsable d'une erreur dans un devis rédigé avec l'aide de l'IA et envoyé à un client ?",
+    o:["L'éditeur de l'IA","Personne","L'entreprise ou la personne qui l'a envoyé","Le client, qui aurait dû vérifier"], c:2,
+    e:"L'IA est un outil : la responsabilité reste chez l'utilisateur. Toujours relire ce qui part chez un client."},
+   {q:"Un texte ou une image générés par l'IA peuvent-ils poser un problème de droits d'auteur ?",
+    o:["Jamais","Oui, c'est un sujet juridique encore mouvant : on évite d'imiter une œuvre ou une marque protégée et on vérifie les conditions de l'outil","Seulement pour les images","Seulement aux États-Unis"], c:1,
+    e:"Demander « dans le style exact de [marque/artiste] » ou reproduire un logo existant expose à des risques."},
+   {q:"Quelle est LA bonne pratique de base en entreprise ?",
+    o:["Interdire totalement l'IA","Laisser chacun faire comme il veut","Définir des règles simples (quels outils, quelles données, quelle relecture) et former les équipes","Tout automatiser sans contrôle"], c:2,
+    e:"Une charte d'usage d'une page et une courte formation évitent la plupart des problèmes."},
+   {q:"Un client discute avec le chatbot de votre site. Devez-vous lui indiquer qu'il parle à une IA ?",
+    o:["Non, c'est mieux s'il ne le sait pas","Oui : la transparence est attendue et l'AI Act impose d'informer les personnes qu'elles interagissent avec une IA","Seulement s'il le demande","Seulement pour les clients étrangers"], c:1,
+    e:"Informer clairement est une obligation de transparence, et cela renforce la confiance."},
+   {q:"Peut-on mettre un mot de passe, un code d'accès ou des coordonnées bancaires dans un prompt ?",
+    o:["Oui, si l'outil est payant","Oui, si on efface la conversation","Non, jamais : ces informations n'ont rien à faire dans une conversation IA","Oui, pour gagner du temps"], c:2,
+    e:"Ce type d'information doit rester dans des outils prévus pour ça (gestionnaire de mots de passe, banque)."}
+  ]},
+
+ {id:"exos", title:"Exercices pratiques", short:"Exercices pratiques", min:9, scored:true,
+  intro:"Passez à la pratique : classer, repérer, choisir, rédiger. Chaque ligne compte pour un point.",
+  weak:"Exercices d'esprit critique : vérifier une réponse, choisir le bon outil, décider quoi déléguer à l'IA.",
+  items:[
+   {t:"grid", k:"exo_deleguer", q:"Pour chaque tâche, indiquez comment l'utiliser avec l'IA.",
+    cols:["Bon usage de l'IA","Possible, avec vérification stricte","À garder humain"],
+    rows:[
+     {r:"Trouver 10 idées de titres pour la newsletter", c:0},
+     {r:"Résumer le compte rendu d'une réunion interne", c:0},
+     {r:"Extraire les montants de 50 factures PDF pour la compta", c:1},
+     {r:"Rédiger la réponse à un litige client avec des montants et des dates", c:1},
+     {r:"Annoncer un licenciement à un salarié", c:2},
+     {r:"Décider seule d'accorder ou non un crédit à un client", c:2},
+     {r:"Préparer le plan d'une présentation commerciale", c:0},
+     {r:"Traduire les conditions générales de vente pour un client étranger", c:1}
+    ],
+    e:"Créatif et interne : feu vert. Chiffres, juridique et client : l'IA aide mais un humain valide. Décisions humaines sensibles : on garde la main."},
+   {t:"grid", k:"exo_outils", q:"Associez chaque besoin au type d'outil le plus adapté.",
+    cols:["Assistant IA (chat)","Générateur d'images","Automatisation (Zapier, Make, n8n)","Tableur ou code"],
+    rows:[
+     {r:"Créer un visuel pour une publication Instagram", c:1},
+     {r:"Préparer un argumentaire commercial pour un nouveau produit", c:0},
+     {r:"Recevoir chaque matin un résumé des avis Google laissés la veille", c:2},
+     {r:"Calculer la marge exacte sur 3 000 références produits", c:3},
+     {r:"Reformuler vos conditions générales en langage simple", c:0},
+     {r:"Ranger chaque facture reçue par mail dans le bon dossier et prévenir la compta", c:2}
+    ],
+    e:"Le chat pour réfléchir et rédiger, l'image pour le visuel, l'automatisation pour ce qui se répète, le tableur pour les calculs exacts."},
+   {t:"grid", k:"exo_halluc", q:"Repérez ce qu'il faut vérifier dans cette réponse générée par une IA.",
+    ctx:"Question posée : « Pourquoi mon entreprise de 10 personnes devrait-elle se former à l'IA ? »|« Selon une étude McKinsey de 2023, 87,4 % des PME françaises utilisent déjà l'IA au quotidien. L'IA peut vous aider à rédiger vos e-mails plus vite. L'article L.1234-56 du Code du travail impose d'ailleurs une formation IA à tous les salariés depuis 2024. Il reste conseillé de relire les contenus avant de les envoyer. Le site officiel aides-ia.gouv.fr propose une subvention de 5 000 € par entreprise. Enfin, un bon prompt précise le contexte et le format attendu. »",
+    cols:["Peu risqué","À vérifier absolument"],
+    rows:[
+     {r:"« 87,4 % des PME françaises utilisent déjà l'IA, selon McKinsey 2023 »", c:1},
+     {r:"« L'IA peut vous aider à rédiger vos e-mails plus vite »", c:0},
+     {r:"« L'article L.1234-56 du Code du travail impose une formation IA »", c:1},
+     {r:"« Il reste conseillé de relire les contenus avant de les envoyer »", c:0},
+     {r:"« aides-ia.gouv.fr propose une subvention de 5 000 € »", c:1},
+     {r:"« Un bon prompt précise le contexte et le format attendu »", c:0}
+    ],
+    e:"Chiffres précis, études nommées, articles de loi, sites et montants : ce sont les signaux typiques d'une possible hallucination. Ici, ils sont inventés."},
+   {t:"long", k:"exo_prompt", q:"Réécrivez ce prompt pour qu'il soit vraiment efficace. Prompt de départ : « Fais-moi un mail pour un client mécontent. »",
+    hint:"Pensez à : le contexte, l'objectif, le destinataire, le ton, le format, les contraintes. Inventez les détails si besoin. Exercice relu au débrief.",
+    ph:"Tu es…\nContexte : …\nObjectif : …\nTon : …\nFormat : …"}
+  ]},
+
+ {id:"cas", title:"Cas pratique", min:5, scored:false,
+  intro:"Appliquez l'IA à votre propre activité. Ces réponses seront relues ensemble lors du débrief.",
+  items:[
+   {t:"long", k:"tache", q:"Décrivez une tâche répétitive ou chronophage de votre quotidien.", hint:"Combien de temps elle vous prend par semaine, qui la fait, avec quels outils."},
+   {t:"long", k:"solution", q:"Comment l'IA pourrait-elle vous aider sur cette tâche, et quels risques voyez-vous ?", hint:"Quel outil, quelles informations vous lui donneriez, ce qu'elle produirait, ce que vous vérifieriez."},
+   {t:"long", k:"frein", q:"Qu'est-ce qui vous freine le plus aujourd'hui avec l'IA ?", hint:"Manque de temps, de formation, confiance, coût, peur de mal faire…"}
+  ]},
+
+ {id:"parcours", title:"Votre parcours", min:5, scored:false,
+  intro:"Pour finir, dites-nous où vous voulez aller. Vos réponses servent à construire un parcours sur mesure.",
+  items:[
+   {t:"multi", k:"themes", q:"Sur quels thèmes voulez-vous progresser en priorité ?", hint:"Choisissez-en 3 au maximum, ce sont ceux par lesquels on commencera.",
+    o:["Utiliser un assistant IA (ChatGPT, Claude…) au quotidien","Rédaction et communication : e-mails, comptes rendus, documents","Marketing et réseaux sociaux","Création de visuels et de vidéos avec l'IA","Analyse de données et Excel","Automatiser des tâches répétitives (Zapier, Make, n8n)","Créer des assistants IA sur mes propres documents","Prospection commerciale et vente","RH, recrutement et gestion d'équipe","Cadre légal, sécurité et charte d'usage","Stratégie IA de l'entreprise"]},
+   {t:"single", k:"objectif", q:"Quel est votre objectif principal ?",
+    o:["Gagner du temps dans mon travail de tous les jours","Mieux comprendre l'IA pour prendre les bonnes décisions","Former et embarquer mon équipe","Lancer un projet IA concret dans l'entreprise","Créer une nouvelle offre ou activité grâce à l'IA","Monter en compétences pour ma carrière"]},
+   {t:"single", k:"autonomie", q:"Quel niveau voulez-vous atteindre ?",
+    o:["Utiliser l'IA correctement et en sécurité","Être à l'aise et créer mes propres méthodes","Devenir la personne référente IA de l'entreprise","Construire moi-même des automatisations et des outils IA"]},
+   {t:"single", k:"public", q:"Qui est concerné par l'accompagnement ?",
+    o:["Moi uniquement","Moi et quelques collaborateurs","Toute mon équipe","Plusieurs équipes ou services"]},
+   {t:"single", k:"format", q:"Quel format vous convient le mieux ?",
+    o:["Séances individuelles","Ateliers en petit groupe","Travailler ensemble sur mes vrais dossiers","Un mix : séances + exercices et vidéos en autonomie"]},
+   {t:"single", k:"rythme", q:"Combien de temps pouvez-vous y consacrer par semaine ?",
+    o:["Moins d'1 heure","1 à 2 heures","2 à 4 heures","Plus de 4 heures"]},
+   {t:"single", k:"echeance", q:"Pour quand voulez-vous des résultats concrets ?",
+    o:["Le plus vite possible (moins d'un mois)","D'ici 1 à 3 mois","D'ici 3 à 6 mois","Pas de date précise"]},
+   {t:"multi", k:"stack", q:"Quels outils utilisez-vous déjà dans l'entreprise ?", hint:"Pour adapter le parcours à votre environnement.",
+    o:["Microsoft 365 (Outlook, Teams, Excel…)","Google Workspace (Gmail, Drive…)","Notion","Un CRM (HubSpot, Salesforce, Pipedrive…)","Un logiciel de comptabilité ou de facturation","Canva","Réseaux sociaux (Instagram, LinkedIn, TikTok…)","WhatsApp Business"]},
+   {t:"long", k:"projet", q:"Avez-vous un projet précis que vous aimeriez réaliser avec l'IA ?", ph:"Ex. : un assistant qui répond aux questions de mes clients, automatiser mes devis, sortir 3 posts par semaine…"},
+   {t:"long", k:"reussite", q:"Dans 3 mois, qu'est-ce qui vous ferait dire que l'accompagnement a réussi ?", ph:"Ex. : je gagne 5 heures par semaine, mon équipe utilise l'IA tous les jours…"}
+  ]}
+];
+
+// --- marque
+(function(){
+  if(BRAND.accent){ const r=document.documentElement.style; r.setProperty("--accent",BRAND.accent); r.setProperty("--on-accent","#FFFFFF");
+    r.setProperty("--accent-soft","color-mix(in srgb, "+BRAND.accent+" 14%, transparent)"); }
+  const b=document.getElementById("brand"); const nm=BRAND.name||"Diagnostic IA";
+  const ini=nm.split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
+  b.innerHTML=(BRAND.logo?`<img src="${BRAND.logo}" alt="${nm}">`:`<span class="mark" aria-hidden="true">${ini}</span>`)
+    +`<span style="min-width:0"><span class="name">${nm}</span>${BRAND.name?`<span class="sub">${BRAND.tagline||"Diagnostic IA"}</span>`:""}</span>`;
+})();
+
+// --- état
+const KEY="diag-ia-v2";
+let S={ans:{}, start:null, done:false, cur:-1, nom:"", ent:""};
+try{const r=localStorage.getItem(KEY); if(r) S=Object.assign(S,JSON.parse(r));}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const consultant=()=>location.hash==="#consultant";
+addEventListener("hashchange",()=>render());
+
+PARTS.forEach(p=>p.items.forEach((it,i)=>{ if(!it.t) it.t="qcm"; if(!it.k) it.k=p.id+"_"+i; }));
+const SCORED=PARTS.filter(p=>p.scored);
+const PART_PARCOURS=PARTS.find(p=>p.id==="parcours");
+const allItems=PARTS.flatMap(p=>p.items);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+const main=document.getElementById("main"), tabs=document.getElementById("tabs");
+
+function answered(it){const v=S.ans[it.k];
+  if(it.t==="grid") return !!v && it.rows.every((_,r)=>v[r]!==undefined);
+  return Array.isArray(v)?v.length>0:(v!==undefined&&v!=="");}
+function partDone(p){return p.items.every(answered);}
+
+// points d'un item noté : {ok, idk, tot}
+function pts(it){
+  if(it.t==="qcm"){const v=S.ans[it.k];return {ok:v===it.c?1:0, idk:v===-1?1:0, tot:1};}
+  if(it.t==="grid"){const v=S.ans[it.k]||{};let ok=0,idk=0;it.rows.forEach((row,r)=>{if(v[r]===row.c)ok++;else if(v[r]===-1)idk++;});return {ok,idk,tot:it.rows.length};}
+  return {ok:0,idk:0,tot:0};
+}
+
+function renderTabs(){
+  tabs.innerHTML = PARTS.map((p,i)=>`<button class="tab ${partDone(p)?"done":""}" role="tab" aria-selected="${S.cur===i}" data-i="${i}"><span class="n">${i+1}</span>${esc(p.title)}</button>`).join("")
+   + (S.done?`<button class="tab" role="tab" aria-selected="${S.cur===99}" data-i="99"><span class="n">✓</span>Résultats</button>`:"");
+  tabs.querySelectorAll(".tab").forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  const n=allItems.filter(answered).length;
+  document.getElementById("progress").textContent=`${n} / ${allItems.length} réponses`;
+}
+
+function go(i){ S.cur=i; save(); render(); window.scrollTo({top:0}); }
+
+function itemHTML(it,n){
+  const v=S.ans[it.k];
+  const num=`<span class="num">${n}</span>`;
+  const hint=it.hint?`<p class="hint">${esc(it.hint)}</p>`:"";
+  if(it.t==="qcm"||it.t==="single"||it.t==="multi"||it.t==="scale"){
+    const type=it.t==="multi"?"checkbox":"radio";
+    let opts=it.o.map((o,j)=>{
+      const chk = it.t==="multi" ? (Array.isArray(v)&&v.includes(j)) : v===j;
+      return `<label class="opt"><input type="${type}" name="${it.k}" id="${it.k}_${j}" value="${j}" ${chk?"checked":""}><span>${esc(o)}</span></label>`;
+    }).join("");
+    if(it.t==="qcm") opts+=`<label class="opt idk"><input type="radio" name="${it.k}" id="${it.k}_idk" value="-1" ${v===-1?"checked":""}><span>${IDK}</span></label>`;
+    const scene=it.s?`<p class="scene"><span class="kind">Situation</span><br>${esc(it.s)}</p>`:"";
+    return `<fieldset class="q"><legend>${num}<span>${esc(it.q)}</span></legend>${scene}${hint}<div class="${it.t==="scale"?"scale":"opts"}">${opts}</div></fieldset>`;
+  }
+  if(it.t==="grid"){
+    const g=v||{};
+    let ctx="";
+    if(it.ctx){const [a,b]=it.ctx.split("|");ctx=`<div class="ctx"><span class="label">Réponse de l'IA</span><p class="muted">${esc(a)}</p><p>${esc(b)}</p></div>`;}
+    const rows=it.rows.map((row,r)=>{
+      const nm=`${it.k}__${r}`;
+      const pills=it.cols.map((c,j)=>`<label class="pill"><input type="radio" name="${nm}" id="${nm}_${j}" value="${j}" data-g="${it.k}" data-r="${r}" ${g[r]===j?"checked":""}>${esc(c)}</label>`).join("")
+        +`<label class="pill idk"><input type="radio" name="${nm}" id="${nm}_idk" value="-1" data-g="${it.k}" data-r="${r}" ${g[r]===-1?"checked":""}>${IDK}</label>`;
+      return `<fieldset class="grow"><legend class="rt"><span class="mono">${String.fromCharCode(65+r)}</span><span>${esc(row.r)}</span></legend><div class="pills">${pills}</div></fieldset>`;
+    }).join("");
+    return `<div class="q"><p class="qt">${num}<span>${esc(it.q)}<br><span class="kind">Exercice · ${it.rows.length} points</span></span></p>${hint}${ctx}<div class="grid">${rows}</div></div>`;
+  }
+  const field = it.t==="text"
+    ? `<input type="text" id="${it.k}" data-k="${it.k}" value="${esc(v||"")}" placeholder="${esc(it.ph||"")}">`
+    : `<textarea id="${it.k}" data-k="${it.k}" placeholder="${esc(it.ph||"")}">${esc(v||"")}</textarea>`;
+  return `<div class="q"><label class="qt" for="${it.k}">${num}<span>${esc(it.q)}</span></label>${hint}${field}</div>`;
+}
+
+function renderIntro(){
+  const nQ=SCORED.reduce((a,p)=>a+p.items.reduce((b,it)=>b+pts(it).tot,0),0);
+  main.innerHTML=`<div class="intro">
+    <span class="label">Évaluation de niveau · 60 minutes · ${allItems.length} questions et exercices</span>
+    <h1>Où en êtes-vous avec l'intelligence artificielle ?</h1>
+    <p class="lead">Cet examen sert à situer votre niveau actuel pour construire un accompagnement adapté. Répondez seul·e, sans chercher les réponses en ligne.</p>
+    <p>Si vous ne savez pas, choisissez <b>« ${IDK} »</b> plutôt que de répondre au hasard. Ce n'est pas pénalisé, et ça nous aide à savoir précisément quoi vous expliquer.</p>
+    <div class="plan">${PARTS.map((p,i)=>`<div><span class="label">Partie ${i+1} · ${p.min} min</span><b>${esc(p.title)}</b><span class="hint">${p.items.length} ${p.items.length>1?"éléments":"élément"}${p.scored?"":" · non notée"}</span></div>`).join("")}</div>
+    <div class="ident">
+      <div class="field"><label for="nom">Prénom et nom</label><input type="text" id="nom" value="${esc(S.nom)}" placeholder="Camille Martin"></div>
+      <div class="field"><label for="ent">Entreprise</label><input type="text" id="ent" value="${esc(S.ent)}" placeholder="Nom de l'entreprise"></div>
+    </div>
+    <p class="hint">Le chronomètre démarre au clic. Vous pouvez naviguer librement entre les parties et vos réponses restent enregistrées dans ce navigateur. À la fin, copiez votre bilan et envoyez-le${BRAND.contact?" à "+esc(BRAND.contact):" à votre consultant"}. Le test est noté sur ${nQ} points.</p>
+    <div class="nav"><span></span><button class="btn primary" id="startBtn">${S.start?"Reprendre l'examen":"Commencer l'examen"}</button></div>
+  </div>`;
+  const nom=document.getElementById("nom"), ent=document.getElementById("ent");
+  nom.oninput=()=>{S.nom=nom.value;save()}; ent.oninput=()=>{S.ent=ent.value;save()};
+  document.getElementById("startBtn").onclick=()=>{ if(!S.start) S.start=Date.now(); go(0); };
+}
+
+function renderPart(i){
+  const p=PARTS[i]; let n=PARTS.slice(0,i).reduce((a,x)=>a+x.items.length,0);
+  main.innerHTML=`<section class="part">
+    <div class="part-head"><span class="label">Partie ${i+1} sur ${PARTS.length} · environ ${p.min} min${p.scored?"":" · non notée"}</span><h2>${esc(p.title)}</h2><p class="muted">${esc(p.intro)}</p></div>
+    ${p.items.map(it=>itemHTML(it,++n)).join("")}
+    <div id="confirmZone"></div>
+    <div class="nav">
+      <button class="btn" id="prev">${i===0?"Retour à l'accueil":"Partie précédente"}</button>
+      ${i<PARTS.length-1?`<button class="btn primary" id="next">Partie suivante</button>`:`<button class="btn primary" id="finish">Terminer et voir mes résultats</button>`}
+    </div></section>`;
+  main.querySelectorAll("input[type=radio]:not([data-g])").forEach(el=>el.onchange=()=>{S.ans[el.name]=+el.value;save();renderTabs();});
+  main.querySelectorAll("input[data-g]").forEach(el=>el.onchange=()=>{const g=el.dataset.g;S.ans[g]=S.ans[g]||{};S.ans[g][el.dataset.r]=+el.value;save();renderTabs();});
+  main.querySelectorAll("input[type=checkbox]").forEach(el=>el.onchange=()=>{
+    S.ans[el.name]=[...main.querySelectorAll(`input[name="${el.name}"]:checked`)].map(x=>+x.value);save();renderTabs();});
+  main.querySelectorAll("[data-k]").forEach(el=>el.oninput=()=>{S.ans[el.dataset.k]=el.value.trim()?el.value:"";save();renderTabs();});
+  document.getElementById("prev").onclick=()=>go(i-1);
+  const nx=document.getElementById("next"); if(nx) nx.onclick=()=>go(i+1);
+  const fin=document.getElementById("finish"); if(fin) fin.onclick=askFinish;
+}
+
+function askFinish(){
+  const missing=allItems.filter(it=>!answered(it)).length;
+  const z=document.getElementById("confirmZone");
+  z.innerHTML=`<div class="confirm"><p><b>${missing? `Il reste ${missing} question${missing>1?"s":""} ou exercice${missing>1?"s":""} incomplet${missing>1?"s":""}.`:"Tout est rempli."}</b> Une fois validé, vous ne pourrez plus modifier vos réponses.</p>
+   <div class="nav"><button class="btn" id="cancelF">Continuer à répondre</button><button class="btn primary" id="okF">Valider mes réponses</button></div></div>`;
+  document.getElementById("cancelF").onclick=()=>z.innerHTML="";
+  document.getElementById("okF").onclick=()=>{S.done=true;S.end=Date.now();save();go(99);};
+  z.scrollIntoView({behavior:"smooth",block:"center"});
+}
+
+const LEVELS=[
+ {min:0, name:"Découverte", txt:"Les bases de l'IA générative sont encore à construire. C'est le meilleur moment pour démarrer avec une méthode claire.",
+  reco:["Comprendre en 1 h ce qu'est (et n'est pas) un assistant IA, avec démonstration sur vos tâches","Créer un compte sur un assistant et l'utiliser 10 minutes par jour pendant deux semaines","Apprendre la structure d'un bon prompt : rôle, contexte, objectif, format","Poser les règles de base sur les données clients avant tout usage"]},
+ {min:40, name:"Initié", txt:"Vous connaissez les principes et avez déjà testé des outils, mais l'usage reste ponctuel et peu structuré.",
+  reco:["Passer d'un usage occasionnel à 3 cas d'usage réguliers liés à votre métier","Travailler le prompting avancé : exemples, itérations, demande de citations","Mettre en place un Projet / GPT avec votre contexte d'entreprise","Clarifier le cadre RGPD et rédiger une charte d'usage simple"]},
+ {min:60, name:"Intermédiaire", txt:"Vous utilisez l'IA avec méthode et connaissez ses limites. L'enjeu est de passer à l'échelle et d'automatiser.",
+  reco:["Cartographier les processus de l'entreprise pour repérer les gains les plus forts","Connecter l'IA à vos outils (Zapier, Make, n8n, Copilot) pour automatiser des étapes","Mesurer les gains avant/après sur 2 ou 3 tâches cibles","Former et embarquer l'équipe autour d'usages partagés"]},
+ {min:80, name:"Avancé", txt:"Vous maîtrisez les concepts, les outils et les risques. Vous pouvez porter des projets IA structurants.",
+  reco:["Concevoir des agents ou des assistants sur vos documents internes (RAG)","Industrialiser : gouvernance, sécurité des données, conformité AI Act","Piloter un portefeuille de cas d'usage avec indicateurs de ROI","Devenir le référent IA interne et former les autres"]}
+];
+const band=pc=>pc>=75?["fort","Point fort"]:pc>=50?["moyen","À consolider"]:["faible","À travailler"];
+
+function compute(){
+  const parts=SCORED.map(p=>{let ok=0,idk=0,tot=0;p.items.forEach(it=>{const x=pts(it);ok+=x.ok;idk+=x.idk;tot+=x.tot;});
+    const pc=Math.round(ok/tot*100);return {p,ok,idk,tot,pc,band:band(pc)};});
+  const ok=parts.reduce((a,x)=>a+x.ok,0), tot=parts.reduce((a,x)=>a+x.tot,0), idk=parts.reduce((a,x)=>a+x.idk,0);
+  const pct=Math.round(ok/tot*100);
+  const li=LEVELS.reduce((a,l,i)=>pct>=l.min?i:a,0);
+  return {parts,ok,tot,idk,wrong:tot-ok-idk,pct,li};
+}
+
+function profileLine(r){
+  const fort=r.parts.filter(x=>x.band[0]==="fort").map(x=>x.p.short);
+  const faible=r.parts.filter(x=>x.band[0]!=="fort").sort((a,b)=>a.pc-b.pc).map(x=>x.p.short);
+  const s=[];
+  if(fort.length) s.push(`Points forts : ${fort.join(", ")}.`);
+  if(faible.length) s.push(`À travailler en priorité : ${faible.join(", ")}.`);
+  return s.join(" ");
+}
+
+function selfVsReal(pct){
+  const c=S.ans.confiance; if(c===undefined) return "";
+  const d=pct-c*25;
+  if(d>=20) return "Vous vous sous-estimez : votre niveau mesuré est nettement au-dessus de votre ressenti. Vous pouvez aller plus loin plus vite que vous ne le pensez.";
+  if(d<=-20) return "Votre ressenti est plus élevé que votre niveau mesuré. Vous utilisez sans doute l'IA, mais certaines notions clés (limites, méthode, cadre légal) méritent d'être consolidées.";
+  return "Votre ressenti correspond bien à votre niveau mesuré.";
+}
+
+function fmtDur(ms){return Math.round(ms/60000)+" min";}
+const ansLabel=(it,v)=>v===undefined?"aucune":v===-1?IDK:it.o?it.o[v]:it.cols[v];
+
+function summaryText(r){
+  const L=LEVELS[r.li]; const lines=[];
+  lines.push(`DIAGNOSTIC IA — ${S.nom||"(nom non renseigné)"}${S.ent?" · "+S.ent:""}`);
+  lines.push(`Date : ${new Date(S.end||Date.now()).toLocaleDateString("fr-FR")} · Durée : ${S.start&&S.end?fmtDur(S.end-S.start):"–"}`);
+  lines.push(`Score : ${r.ok}/${r.tot} (${r.pct} %) · Niveau : ${L.name}`);
+  lines.push(`Bonnes réponses : ${r.ok} · Erreurs : ${r.wrong} · « ${IDK} » : ${r.idk}`);
+  r.parts.forEach(x=>lines.push(`  - ${x.p.title} : ${x.ok}/${x.tot} (${x.pc} %) · ${x.band[1]}${x.idk?` · ${x.idk} « je ne sais pas »`:""}`));
+  lines.push(profileLine(r));
+  lines.push("");
+  const choix=(title,p)=>{lines.push(title);p.items.forEach(it=>{const v=S.ans[it.k];let s;
+    if(v===undefined||v===""||(Array.isArray(v)&&!v.length)) s="—";
+    else if(Array.isArray(v)) s=v.map(j=>it.o[j]).join(", ");
+    else if(typeof v==="number") s=it.o[v]; else s=v;
+    lines.push(`• ${it.q}\n  ${s}`);});lines.push("");};
+  choix("PROFIL",PARTS[0]);
+  choix("PARCOURS SOUHAITÉ",PART_PARCOURS);
+  lines.push("ERREURS ET « JE NE SAIS PAS »");
+  SCORED.forEach(p=>p.items.forEach(it=>{
+    if(it.t==="qcm"){const v=S.ans[it.k]; if(v!==it.c) lines.push(`• [${p.short}] ${it.q}\n  Réponse : ${ansLabel(it,v)} · Attendu : ${it.o[it.c]}`);}
+    if(it.t==="grid"){const g=S.ans[it.k]||{}; it.rows.forEach((row,ri)=>{if(g[ri]!==row.c) lines.push(`• [${p.short}] ${row.r}\n  Réponse : ${ansLabel(it,g[ri])} · Attendu : ${it.cols[row.c]}`);});}
+  }));
+  lines.push("");
+  lines.push("RÉPONSES OUVERTES");
+  allItems.filter(it=>it.t==="long"&&!PARTS[0].items.includes(it)&&!PART_PARCOURS.items.includes(it)).forEach(it=>lines.push(`• ${it.q}\n${(S.ans[it.k]||"—").trim()}\n`));
+  return lines.join("\n");
+}
+
+function corrHTML(){
+  return SCORED.map(p=>{let ok=0,tot=0;p.items.forEach(it=>{const x=pts(it);ok+=x.ok;tot+=x.tot;});
+    const body=p.items.map(it=>{
+      if(it.t==="qcm"){const v=S.ans[it.k],g=v===it.c,idk=v===-1;
+        return `<div class="ci"><span class="mark ${g?"ok":idk?"idkc":"ko"}">${g?"✓":idk?"?":"✗"}</span><div><b>${esc(it.q)}</b><br>${g?"":`<span class="${idk?"idkc":"ko"}">Réponse : ${esc(ansLabel(it,v))}</span><br>`}<span class="ok">Bonne réponse : ${esc(it.o[it.c])}</span><br><span class="muted">${esc(it.e)}</span></div></div>`;}
+      if(it.t==="grid"){const g=S.ans[it.k]||{};
+        return `<div class="ci"><span class="mark">▦</span><div><b>${esc(it.q)}</b>${it.rows.map((row,ri)=>{const ok=g[ri]===row.c,idk=g[ri]===-1;
+          return `<br><span class="${ok?"ok":idk?"idkc":"ko"}">${ok?"✓":idk?"?":"✗"} ${esc(row.r)}</span> → <span class="ok">${esc(it.cols[row.c])}</span>${ok?"":` <span class="muted">(réponse : ${esc(ansLabel(it,g[ri]))})</span>`}`}).join("")}<br><span class="muted">${esc(it.e)}</span></div></div>`;}
+      return "";
+    }).join("");
+    return `<details><summary>${esc(p.title)} · <span class="mono">${ok}/${tot}</span></summary>${body}</details>`;}).join("");
+}
+
+function parcoursCard(){
+  const a=S.ans, it=k=>PART_PARCOURS.items.find(x=>x.k===k);
+  const one=k=>typeof a[k]==="number"?it(k).o[a[k]]:"";
+  const rows=[["Objectif",one("objectif")],["Niveau visé",one("autonomie")],["Pour qui",one("public")],["Format",one("format")],["Rythme",one("rythme")],["Échéance",one("echeance")]].filter(r=>r[1]);
+  const th=(a.themes||[]).map(j=>it("themes").o[j]);
+  if(!rows.length&&!th.length) return "";
+  return `<div class="card"><h3>Votre parcours souhaité</h3>
+    ${th.length?`<p><b>Thèmes prioritaires :</b> ${th.map(esc).join(" · ")}</p>`:""}
+    <div class="two">${rows.map(r=>`<div class="stat"><span class="label">${r[0]}</span><span style="display:block;font-weight:600">${esc(r[1])}</span></div>`).join("")}</div>
+    <p class="muted">Nous partirons de ces choix et de vos résultats pour vous proposer un parcours sur mesure.</p></div>`;
+}
+
+function renderReport(){
+  const r=compute(), L=LEVELS[r.li], cons=consultant();
+  const weak=r.parts.filter(x=>x.pc<60).sort((a,b)=>a.pc-b.pc);
+  main.innerHTML=`<section class="report">
+    <div class="part-head"><span class="label">Bilan${S.nom?" · "+esc(S.nom):""}${S.ent?" · "+esc(S.ent):""}</span>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2>Vos résultats</h2>${cons?`<span class="consult">Mode consultant</span>`:""}</div></div>
+    <div class="verdict">
+      <div class="score mono">${r.pct}<small> %</small><div class="hint" style="font-family:var(--f-body);margin-top:6px">${r.ok} points sur ${r.tot}</div></div>
+      <div style="display:grid;gap:8px;min-width:0">
+        <div><span class="level">Niveau ${esc(L.name)}</span></div>
+        <p>${esc(L.txt)}</p>
+        <div class="ladder" aria-hidden="true">${LEVELS.map((l,i)=>`<span class="${i===r.li?"on":""}">${l.name}</span>`).join("")}</div>
+      </div>
+    </div>
+    <div class="card"><h3>Votre profil par domaine</h3><p>${esc(profileLine(r))}</p><div class="bars">
+      ${r.parts.map(x=>`<div class="barrow"><span>${esc(x.p.short)}</span><div class="track"><div class="fill" style="width:${x.pc}%"></div></div><span class="tag ${x.band[0]}">${x.band[1]}</span><span class="mono" style="text-align:right">${x.ok}/${x.tot}</span></div>`).join("")}
+    </div>${selfVsReal(r.pct)?`<p class="muted">${esc(selfVsReal(r.pct))}</p>`:""}</div>
+    <div class="two">
+      <div class="stat"><span class="label">Erreurs</span><b class="ko">${r.wrong}</b><span class="hint">Des idées reçues à corriger ensemble</span></div>
+      <div class="stat"><span class="label">« ${IDK} »</span><b class="idkc">${r.idk}</b><span class="hint">Des notions à découvrir, sans mauvaise habitude à défaire</span></div>
+    </div>
+    <div class="card"><h3>Prochaines étapes recommandées</h3><ul>
+      ${weak.map(x=>`<li><b>${esc(x.p.short)} :</b> ${esc(x.p.weak)}</li>`).join("")}
+      ${L.reco.slice(0,weak.length>=3?2:4-Math.min(weak.length,2)).map(x=>`<li>${esc(x)}</li>`).join("")}
+    </ul></div>
+    ${parcoursCard()}
+    <div class="card"><h3>Envoyer le bilan${BRAND.contact?" à "+esc(BRAND.contact):" à votre consultant"}</h3><p class="muted">Copiez ce texte et envoyez-le par e-mail ou messagerie. Il contient votre score, votre profil et toutes vos réponses, que nous relirons ensemble.</p>
+      <div class="out" id="out"></div>
+      <div class="nav"><span class="hint" id="copyMsg" aria-live="polite"></span><button class="btn primary" id="copy">Copier le bilan</button></div></div>
+    ${cons?`<div class="corr"><h3>Corrigé détaillé</h3>${corrHTML()}</div>`
+         :`<div class="locked"><b>Le corrigé détaillé</b> vous sera présenté et expliqué lors de votre séance de débrief.</div>`}
+    ${cons?`<div class="nav"><span></span><button class="btn" id="reset">Effacer et recommencer</button></div><div id="resetZone"></div>`:""}
+  </section>`;
+  const txt=summaryText(r), out=document.getElementById("out"); out.textContent=txt;
+  document.getElementById("copy").onclick=()=>{
+    const msg=document.getElementById("copyMsg");
+    const sel=()=>{const rg=document.createRange();rg.selectNodeContents(out);const s=getSelection();s.removeAllRanges();s.addRange(rg);msg.textContent="Texte sélectionné : copiez-le avec Cmd/Ctrl + C.";};
+    try{navigator.clipboard.writeText(txt).then(()=>msg.textContent="Bilan copié.",sel);}catch(e){sel();}
+  };
+  const rs=document.getElementById("reset");
+  if(rs) rs.onclick=()=>{
+    const z=document.getElementById("resetZone");
+    z.innerHTML=`<div class="confirm"><p>Toutes les réponses seront effacées de ce navigateur.</p><div class="nav"><button class="btn" id="rc">Annuler</button><button class="btn primary" id="ro">Tout effacer</button></div></div>`;
+    document.getElementById("rc").onclick=()=>z.innerHTML="";
+    document.getElementById("ro").onclick=()=>{S={ans:{},start:null,done:false,cur:-1,nom:"",ent:""};save();go(-1);};
+  };
+}
+
+function render(){
+  renderTabs();
+  if(S.cur===99&&S.done) renderReport();
+  else if(S.cur>=0&&S.cur<PARTS.length&&!S.done) renderPart(S.cur);
+  else if(S.done){S.cur=99;renderTabs();renderReport();}
+  else renderIntro();
+  tabs.hidden = S.cur===-1 && !S.start;
+}
+
+// chrono
+const timerEl=document.getElementById("timer");
+function tick(){
+  if(!S.start){timerEl.textContent="60:00";return;}
+  const end=S.done&&S.end?S.end:Date.now();
+  const left=60*60000-(end-S.start), a=Math.abs(left);
+  const m=Math.floor(a/60000), s=Math.floor(a%60000/1000);
+  timerEl.textContent=(left<0?"+":"")+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+  timerEl.classList.toggle("low",left>0&&left<5*60000);
+  timerEl.classList.toggle("over",left<=0);
+  timerEl.title=left<0?"Temps dépassé":"Temps restant";
+}
+setInterval(tick,1000); tick();
+render();
+</script>
+</body>
+</html>
